@@ -1,0 +1,55 @@
+{
+  "manifest_version": 3,
+  "name": "LMArena Stealth Model Selector",
+  "version": "1.0.0",
+  "description": "Reveal and select hidden models on Arena AI — restores Opus, unlocks non-selectable entries and can force a hidden model into the next message.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://arena.ai/*",
+    "https://*.arena.ai/*",
+    "https://canaryarena.ai/*",
+    "https://*.canaryarena.ai/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LMArena Stealth",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://arena.ai/*", "https://*.arena.ai/*", "https://canaryarena.ai/*", "https://*.canaryarena.ai/*"],
+      "js": ["boot.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://arena.ai/*", "https://*.arena.ai/*", "https://canaryarena.ai/*", "https://*.canaryarena.ai/*"],
+      "js": ["main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://arena.ai/*", "https://*.arena.ai/*", "https://canaryarena.ai/*", "https://*.canaryarena.ai/*"],
+      "js": ["model-utils.js", "models-scan.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["https://arena.ai/*", "https://*.arena.ai/*", "https://canaryarena.ai/*", "https://*.canaryarena.ai/*"]
+    }
+  ]
+}

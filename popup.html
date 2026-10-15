@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 288px; padding: 14px;
+    background: #0f0f14; color: #e4e4ea;
+    font: 12px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 13px; color: #c4b5fd; margin-bottom: 2px; }
+  .sub { color: #6f6f7e; font-size: 10px; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid #1c1c24; }
+  .row .lbl { font-size: 12px; }
+  .row .hint { color: #6f6f7e; font-size: 10px; margin-top: 1px; }
+  .sw { position: relative; flex: none; width: 36px; height: 20px; }
+  .sw input { display: none; }
+  .sw span { position: absolute; inset: 0; background: #2b2b35; border-radius: 10px; cursor: pointer; transition: .15s; }
+  .sw span::after { content: ''; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: #8a8a99; border-radius: 50%; transition: .15s; }
+  .sw input:checked + span { background: #7c3aed; }
+  .sw input:checked + span::after { transform: translateX(16px); background: #fff; }
+  .stat { margin-top: 10px; padding: 8px 10px; border: 1px solid #23232c; border-radius: 8px; background: #12121a; color: #9a9aa8; font-size: 11px; word-break: break-word; }
+  .stat b { color: #c4b5fd; }
+  .stat .hi { color: #a5f3fc; }
+  .btn { display: block; width: 100%; margin-top: 10px; padding: 8px; border: none; border-radius: 8px; background: #7c3aed; color: #fff; font: 600 11px/1 inherit; cursor: pointer; }
+  .btn.alt { background: #1e1b3a; color: #a5b4fc; }
+  .note { margin-top: 10px; color: #6f6f7e; font-size: 10px; text-align: center; }
+  .models { margin-top: 8px; max-height: 128px; overflow: auto; border: 1px solid #23232c; border-radius: 8px; }
+  .m { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid #16161d; cursor: pointer; }
+  .m:last-child { border-bottom: none; }
+  .m:hover { background: #16161f; }
+  .m .n { flex: 1; color: #e9e9f0; font-size: 11px; }
+  .m .o { color: #6f6f7e; font-size: 9px; }
+  .m .t { padding: 0 4px; border-radius: 4px; background: #3b1d1d; color: #fca5a5; font-size: 8.5px; font-weight: 700; }
+</style>
+</head>
+<body>
+  <h1>LMArena Stealth</h1>
+  <div class="sub">Hidden model selector for arena.ai</div>
+
+  <div class="row">
+    <div><div class="lbl">Active</div><div class="hint">Master switch</div></div>
+    <label class="sw"><input type="checkbox" id="e"><span></span></label>
+  </div>
+  <div class="row">
+    <div><div class="lbl">Restore Opus</div><div class="hint">Kills the disable-opus flag</div></div>
+    <label class="sw"><input type="checkbox" id="o"><span></span></label>
+  </div>
+  <div class="row">
+    <div><div class="lbl">Show hidden</div><div class="hint">userSelectable false → true</div></div>
+    <label class="sw"><input type="checkbox" id="h"><span></span></label>
+  </div>
+  <div class="row">
+    <div><div class="lbl">Force on send</div><div class="hint">Rewrite modelAId in requests</div></div>
+    <label class="sw"><input type="checkbox" id="f"><span></span></label>
+  </div>
+
+  <div class="stat" id="stat">Scanning…</div>
+  <div class="models" id="models"></div>
+  <button class="btn" id="reload">Reload arena.ai tab</button>
+  <button class="btn alt" id="clear">Clear cached catalog</button>
+  <div class="note">Toggle switches, reload the page, then use the floating “Stealth” button.</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
