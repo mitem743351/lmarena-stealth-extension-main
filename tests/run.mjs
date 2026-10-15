@@ -14,6 +14,7 @@ const want = process.argv[2] || '';
 const suites = [
   { id: 'manifest', file: 'manifest.test.mjs', needsJsdom: false, what: 'manifest: files exist, scripts parse, no remote code' },
   { id: 'page', file: 'page-hook.test.mjs', needsJsdom: false, what: 'page hook: flight unlock + request rewrite + stream tap' },
+  { id: 'catalog', file: 'live-catalog.test.mjs', needsJsdom: true, what: 'live catalog: 1,066 real models replayed through the real files' },
   { id: 'panel', file: 'panel.test.mjs', needsJsdom: true, what: 'panel: catalog, hidden filter, deep links, force toggle' },
   { id: 'bridge', file: 'bridge.test.mjs', needsJsdom: true, what: 'bridge: sync storage -> localStorage -> page world' },
 ];

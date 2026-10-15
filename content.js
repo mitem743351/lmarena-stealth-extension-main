@@ -46,17 +46,11 @@
     { id: 'home', label: 'Home', url: '/', param: null }
   ];
 
-  function slugOf(name) {
-    return String(name || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
-
   function linkFor(mode, model) {
     var base = 'https://arena.ai' + mode.url;
     if (!mode.param || !model) return base;
-    var v = slugOf(model.publicName) || model.id;
+    // Arena takes the publicName as-is (lower-cased), not a slug — see model-utils.js
+    var v = window.KnowModel.paramValue(model) || model.id;
     return base + '?' + mode.param + '=' + encodeURIComponent(v);
   }
 
@@ -117,10 +111,21 @@
     });
   }
 
-  function isHidden(m) { return m && m.userSelectable === false; }
+  function isHidden(m) { return window.KnowModel.isHidden(m); }
   function orgOf(m) { return (m && (m.organization || m.organizationName)) || 'unknown'; }
   function capsOf(m) {
     try { return window.KnowModel.caps(m); } catch (e) { return []; }
+  }
+
+  // 102 publicNames appear more than once in the real catalog, so a name link can
+  // be ambiguous — flag it and lean on the id link instead.
+  function nameCount(name) {
+    var n = 0;
+    var lower = String(name || '').toLowerCase();
+    for (var i = 0; i < state.models.length; i++) {
+      if (String(state.models[i].publicName || '').toLowerCase() === lower) n++;
+    }
+    return n;
   }
 
   function applyCatalog(models) {
@@ -286,14 +291,7 @@
   function matches(m) {
     if (state.hiddenOnly && !isHidden(m)) return false;
     if (state.capFilter) {
-      var caps = capsOf(m).join(' ').toLowerCase();
-      var t = state.capFilter;
-      var map = { text: '文本', image: '生图', search: '搜索', video: '视频' };
-      if (t === 'text' && caps.indexOf('文本') === -1) return false;
-      if (t === 'image' && caps.indexOf('生图') === -1) return false;
-      if (t === 'search' && caps.indexOf('搜索') === -1) return false;
-      if (t === 'video' && caps.indexOf('视频') === -1) return false;
-      void map;
+      if (capsOf(m).indexOf(state.capFilter) === -1) return false;
     }
     var q = state.filter;
     if (!q) return true;
@@ -317,6 +315,7 @@
       var name = el('div', 'lm-name', String(m.publicName || m.id));
       if (isHidden(m)) name.appendChild(el('span', 'lm-tag', 'hidden'));
       var meta = el('div', 'lm-org', orgOf(m) + (capsOf(m).length ? ' · ' + capsOf(m).join('/') : ''));
+      if (nameCount(m.publicName) > 1) meta.textContent += ' · ' + nameCount(m.publicName) + ' share this name';
       row.appendChild(name);
       row.appendChild(meta);
       row.title = m.id;
@@ -356,12 +355,26 @@
       links.appendChild(a);
     });
     d.appendChild(links);
+    var dupes = nameCount(m.publicName);
+    if (dupes > 1) {
+      d.appendChild(el('div', 'lm-warn',
+        dupes + ' catalog entries share the name “' + String(m.publicName) + '” — the links above use the ' +
+        'shared name, so use the id link below to pin this exact one.'));
+    }
     var idr = el('div', 'lm-links');
-    var a2 = el('a', 'lm-link lm-link-alt', 'Direct link using raw id');
+    var a2 = el('a', 'lm-link lm-link-alt', 'Pin this exact id');
     a2.href = linkForId(MODES[0], m);
     a2.target = '_blank';
     a2.rel = 'noopener';
     idr.appendChild(a2);
+    var a3 = el('a', 'lm-link lm-link-alt', 'Copy id');
+    a3.href = '#';
+    a3.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      try { navigator.clipboard.writeText(m.id); } catch (e) {}
+      flash('id copied');
+    });
+    idr.appendChild(a3);
     d.appendChild(idr);
   }
 

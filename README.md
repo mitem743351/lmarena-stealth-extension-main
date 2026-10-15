@@ -104,12 +104,36 @@ npm test           # 4 suites, ~60 assertions
 | Suite | What it proves |
 | --- | --- |
 | `manifest` | every file in the manifest exists, all scripts parse, hook is `world: MAIN` at `document_start`, and there is **no `eval`, no injected `<script>`, no remote URL** anywhere |
+| `catalog` | an **unmodified 1,066-model arena.ai catalog** (126 of them hidden) is rebuilt into a real Flight payload and driven through the real files: scanner recovers all 1,066, the hook un-hides exactly the 126, Opus-only mode flips exactly the 24 Opus entries, every one of the 1,066 names yields a valid `?model_a=` value, and capability mapping covers the real keys |
 | `page` | flight unlocking (escaped + plain, toggle matrix incl. Opus-scoped), JSON still parses after rewrite, `modelAId` rewrite for plain / `URLSearchParams` / framed bodies, unrelated endpoints untouched, `routed_model` stream tap |
 | `panel` | hidden-only default filter, badges, clipboard copy, deep-link slugs, mode dropdown, force switch + paste-an-id, foreign `postMessage` ignored |
 | `bridge` | `chrome.storage.sync` → `localStorage` → page world, live change propagation, corrupt-mirror recovery |
 
 The tests run the real files — `main.js` is executed inside a `vm` window, `content.js` inside a
 jsdom arena.ai page. `node tests/run.mjs page` needs no dependencies at all.
+
+### Testing against the live site
+
+This was built in a sandbox whose egress policy kills TLS to `arena.ai` (DNS resolves, TCP connects,
+the handshake is dropped), so no automated run can drive the logged-in site from here. Two things
+close that gap:
+
+1. **`tests/fixtures/arena-catalog.real.json`** — a real captured catalog, used by the `catalog`
+   suite above. That is where the two bugs in the *Bug fixes found by real data* section below came
+   from.
+2. **`tools/live-probe.js`** — paste it into the DevTools console on a logged-in arena.ai tab. It is
+   read-only (sends nothing, reads no chat text, touches no cookies) and reports: what the server
+   actually sent (model + hidden counts), whether the page-world hook rewrote it before the app
+   parsed it, **which field the live evaluation request carries the model in**, and the
+   `routed_model` event showing which model actually ran.
+
+### Bug fixes found by real data
+
+| Found | Impact | Fix |
+| --- | --- | --- |
+| `?model_a=` was being *slugified* (`gemini-3.6-flash` → `gemini-3-6-flash`) | would have broken deep links for **265 of 1,066** real names containing a dot | use the `publicName` lower-cased, verbatim — verified against your own `?model_a=gemini-3.6-flash` / `=max` examples |
+| capability labels only knew `text`/`search`/`image` | **330** real models are `web`-capable and were shown as capability-less; `image` is an *object* (`{aspectRatios:[…]}`) not a boolean | map `text · web · image · search · video` from truthiness, not strict booleans |
+| 102 `publicName`s appear more than once (one appears 15×) | a name-based link silently picks a sibling | panel now warns when a name is shared and offers a "pin this exact id" link |
 
 ---
 
@@ -125,6 +149,9 @@ jsdom arena.ai page. `node tests/run.mjs page` needs no dependencies at all.
   (everything endpoint-specific lives in `EVAL_RE` and `rewriteEvalBody` in `main.js`).
 * **First load after install** uses defaults until `chrome.storage.sync` answers; from the next
   reload your saved toggles drive it.
+* **Names are not unique.** 102 real `publicName`s are duplicated in the catalog (one 15 times).
+  A `?model_a=<name>` link picks whichever sibling the server resolves; the panel's
+  *Pin this exact id* link is the unambiguous one.
 * Deliberately **not** included: bundled historical model lists. Pasted/forced ids are the
   honest way to try a retired entry, since nobody can promise it still exists.
 
@@ -143,7 +170,8 @@ styles.css        panel styles (namespaced under lm-)
 popup.html/js     toggles, cached catalog preview
 background.js     toolbar badge with the hidden-model count
 pack.sh           builds dist/lmarena-stealth-<version>.zip
-tests/            manifest, page-hook, panel and bridge suites (node tests/run.mjs)
+tests/            manifest, page-hook, live-catalog, panel and bridge suites
+tools/live-probe.js  console probe for a logged-in arena.ai tab
 ```
 
 `main.js` and the isolated-world scripts talk over `localStorage` (same origin, shared by both
