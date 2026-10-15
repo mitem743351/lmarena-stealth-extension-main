@@ -13,6 +13,9 @@
   var STORAGE_LAST = 'lmarenaLastScan';
   var PANEL_ID = 'lm-stealth-panel';
   var BTN_ID = 'lm-stealth-btn';
+  var VERSION = (function () {
+    try { return chrome.runtime.getManifest().version; } catch (e) { return 'dev'; }
+  })();
 
   /* ---------------------------------------------------------------- state */
   var state = {
@@ -24,6 +27,9 @@
     routed: '',
     sent: '',
     status: '',
+    catalogSource: '',
+    diag: null,
+    pageAlive: false,
     modes: []
   };
 
@@ -128,14 +134,43 @@
     return n;
   }
 
-  function applyCatalog(models) {
-    if (!Array.isArray(models) || !models.length) return;
-    models.sort(function (a, b) {
+  function sortModels() {
+    state.models.sort(function (a, b) {
       var ah = isHidden(a) ? 0 : 1, bh = isHidden(b) ? 0 : 1;
       if (ah !== bh) return ah - bh;
       return String(a.publicName || '').localeCompare(String(b.publicName || ''));
     });
-    state.models = models;
+  }
+
+  function applyCatalog(models) {
+    if (!Array.isArray(models) || !models.length) return;
+    state.models = models.slice();
+    sortModels();
+  }
+
+  /* Merge, keyed by id (ids are unique in the real catalog).
+   * "hidden" always wins: the copy on the wire may already have been flipped to
+   * true by our own hook, and once a model was ever seen hidden it stays flagged. */
+  function mergeModels(incoming) {
+    if (!Array.isArray(incoming) || !incoming.length) return 0;
+    var byId = {};
+    for (var i = 0; i < state.models.length; i++) {
+      var m = state.models[i];
+      if (m && m.id) byId[m.id] = m;
+    }
+    var added = 0, changed = false;
+    for (var j = 0; j < incoming.length; j++) {
+      var inc = incoming[j];
+      if (!inc || !inc.id) continue;
+      var ex = byId[inc.id];
+      if (!ex) { byId[inc.id] = inc; added++; changed = true; continue; }
+      if (inc.userSelectable === false && ex.userSelectable !== false) { ex.userSelectable = false; changed = true; }
+      if (!ex.capabilities && inc.capabilities) { ex.capabilities = inc.capabilities; changed = true; }
+      if (!ex.organization && inc.organization) { ex.organization = inc.organization; changed = true; }
+      if (!ex.displayName && inc.displayName) { ex.displayName = inc.displayName; changed = true; }
+    }
+    if (changed) { state.models = Object.keys(byId).map(function (k) { return byId[k]; }); sortModels(); }
+    return added;
   }
 
   /* ------------------------------------------------------------------ UI */
@@ -160,6 +195,7 @@
     panel.innerHTML =
       '<div class="lm-head">' +
         '<span class="lm-title">Stealth Models</span>' +
+        '<span class="lm-ver">v' + VERSION + '</span>' +
         '<span class="lm-badge" id="lm-count">0</span>' +
         '<button class="lm-x" id="lm-close" title="Close">×</button>' +
       '</div>' +
@@ -173,6 +209,7 @@
       '</div>' +
       '<div class="lm-search"><input id="lm-q" type="text" placeholder="Search models, orgs, codenames…"><button id="lm-rescan" title="Rescan page">↻</button></div>' +
       '<div class="lm-status" id="lm-status">…</div>' +
+      '<div class="lm-diag" id="lm-diag"></div>' +
       '<div class="lm-list" id="lm-list"></div>' +
       '<div class="lm-detail" id="lm-detail"></div>' +
       '<div class="lm-foot">' +
@@ -263,6 +300,47 @@
     renderStatus();
   }
 
+  /* One line of truth about why the list may be empty. */
+  function renderDiag(payload) {
+    var el2 = document.getElementById('lm-diag');
+    if (!el2) return;
+    var d = (payload && payload.diag) || state.diag;
+    if (!d && !state.pageAlive) {
+      el2.innerHTML = '<b>page hook not talking.</b> Reload the arena.ai tab — the hook must be in place before Arena boots.';
+      el2.classList.add('lm-open');
+      return;
+    }
+    el2.classList.remove('lm-open');
+    if (d) {
+      el2.innerHTML = 'hook: pushes=' + (d.pushes || 0) + ' bytes=' + Math.round((d.pushBytes || 0) / 1024) + 'k' +
+        ' · responses=' + (d.inspected || 0) + '/' + (d.fetchSeen || 0) +
+        ' · xhr=' + (d.xhrSeen || 0) +
+        ' · domSweeps=' + (d.domScans || 0) +
+        ' · catalogHits=' + (d.catalogHits || 0) +
+        ' · evalSeen=' + (d.evalSeen || 0) +
+        (d.sources && d.sources.length ? ' · sources=' + d.sources.slice(-3).join(',') : '') +
+        (d.errors && d.errors.length ? ' · errors=' + d.errors.slice(-2).join(' | ') : '');
+    }
+  }
+
+  function reportText() {
+    return JSON.stringify({
+      url: location.href,
+      models: state.models.length,
+      hidden: state.models.filter(isHidden).length,
+      catalogSource: state.catalogSource,
+      pageAlive: state.pageAlive,
+      diag: state.diag,
+      cfg: readCfg(),
+      extension: 'lmarena-stealth',
+      version: VERSION
+    }, null, 2);
+  }
+
+  function askPage(type) {
+    try { window.postMessage({ __lmStealth: true, from: 'panel', type: type }, '*'); } catch (e) {}
+  }
+
   function renderStatus() {
     var s = document.getElementById('lm-status');
     if (!s) return;
@@ -308,7 +386,25 @@
     var shown = state.models.filter(matches);
     list.innerHTML = '';
     if (!shown.length) {
-      list.appendChild(el('div', 'lm-empty', 'No models match. Toggle filters or hit ↻ to rescan.'));
+      var msg = state.models.length
+        ? 'No models match these filters — hit “All” or clear the search.'
+        : 'No catalog yet. The page hook is watching pushes, fetches and XHR on this tab. ' +
+          'If this stays empty: reload the tab, then press “Get catalog”.';
+      var box = el('div', 'lm-empty', msg);
+      if (!state.models.length) {
+        var b1 = el('button', 'lm-link', 'Get catalog');
+        b1.addEventListener('click', function () { askPage('fetch-catalog'); askPage('get-catalog'); flash('asking the page for its catalog…'); });
+        var b2 = el('button', 'lm-link', 'Copy report');
+        b2.addEventListener('click', function () {
+          askPage('diag');
+          try { navigator.clipboard.writeText(reportText()); } catch (e) {}
+          flash('report copied');
+        });
+        var row = el('div', 'lm-links');
+        row.appendChild(b1); row.appendChild(b2);
+        box.appendChild(row);
+      }
+      list.appendChild(box);
     }
     shown.slice(0, 400).forEach(function (m) {
       var row = el('div', 'lm-row' + (state.selected && state.selected.id === m.id ? ' lm-sel' : ''));
@@ -417,7 +513,20 @@
     } else if (d.type === 'sent') {
       state.sent = d.modelId || '';
       renderStatus();
+    } else if (d.type === 'catalog') {
+      var added = mergeModels(d.models);
+      if (d.source) state.catalogSource = d.source;
+      if (added || !state.models.length) {
+        persist(state.models);
+        renderList();
+        renderDetail();
+        flash('catalog: ' + state.models.length + ' models via ' + (d.source || 'page'));
+      }
+    } else if (d.type === 'diag') {
+      state.diag = d.diag || null;
+      renderDiag(d);
     } else if (d.type === 'ready') {
+      state.pageAlive = true;
       renderStatus();
     }
   });
@@ -445,6 +554,20 @@
     renderDetail();
     renderStatus();
 
+    // The page hook may already hold the catalog (it runs before this script).
+    askPage('ping');
+    askPage('get-catalog');
+
+    // While the list is empty, keep asking — the catalog may arrive late.
+    var asks = 0;
+    var askTimer = setInterval(function () {
+      asks++;
+      if (state.models.length || asks > 30) { clearInterval(askTimer); return; }
+      askPage('get-catalog');
+      renderStatus();
+      if (asks === 3) renderDiag(null);
+    }, 2000);
+
     // SPA re-hydration + client-side navigations
     var tries = 0;
     var t = setInterval(function () {
@@ -464,6 +587,7 @@
       state.routed = '';
       state.sent = '';
       renderStatus();
+      askPage('get-catalog');
       setTimeout(function () {
         var f = scanCatalog();
         if (f) { applyCatalog(f); persist(f); renderList(); }

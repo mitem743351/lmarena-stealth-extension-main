@@ -9,6 +9,30 @@ what *your own page* already received from Arena.
 
 ---
 
+## Fixes in 1.0.2 — the "0 models" report
+
+The first build showed an empty panel on a real logged-in page. Two causes, both found by
+replaying real payload shapes:
+
+1. **The scanner was too rigid.** It accepted exactly one form —
+   `self.__next_f.push([1,"…\"initialModels\":[…],\"initialModelAId…"])`. Five other shapes broke it:
+   unescaped payloads, a different key after the array, the list nested under a `models` key, a plain
+   JSON-string literal, and **payloads split across several pushes**. The bracket matcher also
+   mishandled escaped payloads (`\"` is a *delimiter* there, not an escaped quote), so every escaped
+   form failed. Now the catalog is found by locating the key, bracket-matching string-aware, and
+   parsing raw **or** JS-string-decoded — and pushes are decoded and concatenated before the search,
+   which is the only way a split payload can resolve.
+2. **The panel depended on the payload being inline.** On a page that hydrates client-side, the
+   catalog only ever arrives over the network. The page hook now hunts it across **inline pushes,
+   RSC fetches, XHR, a bare `/models` response and a DOM sweep**, and posts it to the panel. If it
+   still finds nothing it can pull the route's own flight payload (`RSC: 1`).
+
+The panel now also shows **v1.0.2** in its header, so you can tell which build is live, and the empty
+state explains itself with *Get catalog* and *Copy report* buttons plus a hook-diagnostics line.
+
+> After updating an unpacked extension you must press **Reload** on `chrome://extensions` **and**
+> reload the arena.ai tab — content scripts are not hot-swapped into a running page.
+
 ## Install (unpacked, 30 seconds)
 
 1. Download this repo (or just `dist/lmarena-stealth-1.0.0.zip` and unzip it).
@@ -104,6 +128,8 @@ npm test           # 4 suites, ~60 assertions
 | Suite | What it proves |
 | --- | --- |
 | `manifest` | every file in the manifest exists, all scripts parse, hook is `world: MAIN` at `document_start`, and there is **no `eval`, no injected `<script>`, no remote URL** anywhere |
+| `shapes` | the six payload shapes a real page can deliver: unescaped, escaped, nested under `models`, split across two pushes, JSON-string literal, and nothing-inline |
+| `delivery` | the "0 models" regression: with **nothing inline**, the catalog arriving via fetch, XHR or the route-pull still reaches the panel, hidden flags survive an already-patched wire copy, and the recovery buttons work |
 | `catalog` | an **unmodified 1,066-model arena.ai catalog** (126 of them hidden) is rebuilt into a real Flight payload and driven through the real files: scanner recovers all 1,066, the hook un-hides exactly the 126, Opus-only mode flips exactly the 24 Opus entries, every one of the 1,066 names yields a valid `?model_a=` value, and capability mapping covers the real keys |
 | `page` | flight unlocking (escaped + plain, toggle matrix incl. Opus-scoped), JSON still parses after rewrite, `modelAId` rewrite for plain / `URLSearchParams` / framed bodies, unrelated endpoints untouched, `routed_model` stream tap |
 | `panel` | hidden-only default filter, badges, clipboard copy, deep-link slugs, mode dropdown, force switch + paste-an-id, foreign `postMessage` ignored |

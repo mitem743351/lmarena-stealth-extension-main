@@ -124,7 +124,34 @@
   ok('fetch watcher armed — now send any message on this page.');
   log('You will see the model field name, the id sent, and the model that actually ran.');
 
-  /* ---------- 4. quick deep-link check without sending anything ---------- */
+  /* ---------- 4. ask the extension's page hook what it has seen ---------- */
+  const hookReply = new Promise((resolve) => {
+    const onMsg = (ev) => {
+      const d = ev.data;
+      if (!d || d.__lmStealth !== true || d.from !== 'page') return;
+      if (d.type === 'diag' || d.type === 'catalog') resolve(d);
+    };
+    window.addEventListener('message', onMsg);
+    window.postMessage({ __lmStealth: true, from: 'panel', type: 'diag' }, '*');
+    window.postMessage({ __lmStealth: true, from: 'panel', type: 'get-catalog' }, '*');
+    setTimeout(() => resolve(null), 1500);
+  });
+  const reply = await hookReply;
+  if (!reply) {
+    warn('the extension page hook did not answer. Either it was loaded after this page');
+    warn('was opened, or the extension is not installed. Reload the tab and re-run.');
+  } else if (reply.type === 'diag') {
+    const d = reply.diag || {};
+    log('hook diagnostics:', JSON.stringify(d));
+    ok(`hook captured ${reply.catalogCount || 0} models` + (reply.catalogSource ? ` (via ${reply.catalogSource})` : ''));
+    if (!reply.catalogCount) {
+      warn('the hook has not seen a catalog either. Report the diagnostics line above.');
+    }
+  } else if (reply.type === 'catalog') {
+    ok(`hook delivered ${reply.count} models via ${reply.source}`);
+  }
+
+  /* ---------- 5. quick deep-link check without sending anything ---------- */
   if (models.length) {
     const hidden = models.filter((m) => m.userSelectable === false);
     const pick = hidden[0] || models[0];

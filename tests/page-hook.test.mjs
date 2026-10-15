@@ -1,10 +1,16 @@
 /* Full harness: exercising main.js exactly as it runs in the page world. */
 import { readFileSync } from 'fs';
 import vm from 'vm';
+import { JSDOM } from 'jsdom';
 
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+function makeDoc() {
+  const d = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://arena.ai/text/direct' });
+  return d.window.document;
+}
 
 function makeSandbox(cfg, fetchImpl) {
   const store = new Map();
@@ -18,6 +24,7 @@ function makeSandbox(cfg, fetchImpl) {
   };
   win.XMLHttpRequest.prototype = { open() {}, send() {} };
   const posts = [];
+  win.document = makeDoc();
   const sandbox = {
     window: win, self: win, console, URL, URLSearchParams, TextDecoder, TextEncoder,
     Response: class { constructor(b, i) { this.body = b; Object.assign(this, i); } },

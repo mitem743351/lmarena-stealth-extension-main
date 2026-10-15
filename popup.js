@@ -10,6 +10,7 @@
     f: document.getElementById('f')
   };
   var statEl = document.getElementById('stat');
+  try { document.getElementById('ver').textContent = 'v' + chrome.runtime.getManifest().version; } catch (e) {}
   var listEl = document.getElementById('models');
   var models = [];
 

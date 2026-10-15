@@ -13,6 +13,7 @@ import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import vm from 'vm';
+import { JSDOM as JSDOMvm } from 'jsdom';
 import { JSDOM } from 'jsdom';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,9 +52,10 @@ check('scanned userSelectable flags survive', scanned.filter((m) => m.userSelect
  * ------------------------------------------------------------------ */
 function runHook(cfg, payload) {
   const store = new Map([['lm_stealth_cfg', JSON.stringify(cfg)]]);
+  const vmDom = new JSDOMvm('<!doctype html><html><body></body></html>', { url: 'https://arena.ai/text/direct' });
   const win = {
     location: { href: 'https://arena.ai/text/direct', origin: 'https://arena.ai' },
-    addEventListener() {}, postMessage() {},
+    addEventListener() {}, postMessage() {}, document: vmDom.window.document,
     fetch: () => Promise.resolve(), XMLHttpRequest: function () {}, __next_f: null,
   };
   win.XMLHttpRequest.prototype = { open() {}, send() {} };

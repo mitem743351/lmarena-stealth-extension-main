@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LMArena Stealth Model Selector",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Reveal and select hidden models on Arena AI — restores Opus, unlocks non-selectable entries and can force a hidden model into the next message.",
   "permissions": ["storage", "tabs"],
   "host_permissions": [

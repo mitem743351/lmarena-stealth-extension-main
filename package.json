@@ -1,6 +1,6 @@
 {
   "name": "lmarena-stealth-model-selector",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Chrome MV3 extension that reveals and selects hidden models on arena.ai — plus the test harness that proves it.",
   "scripts": {
